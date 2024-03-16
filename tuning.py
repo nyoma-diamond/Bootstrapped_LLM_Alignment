@@ -39,27 +39,9 @@ lora_config = LoraConfig(
 target_model = AutoModelForCausalLMWithValueHead.from_pretrained(target_model_id, peft_config=lora_config)
 target_tokenizer = AutoTokenizer.from_pretrained(target_model_id)
 
-# supervisor_model = AutoModelForCausalLMWithValueHead.from_pretrained(supervisor_model_id, peft_config=lora_config)
-# supervisor_tokenizer = AutoTokenizer.from_pretrained(supervisor_model_id)
-
 target_tokenizer.pad_token_id = target_tokenizer.eos_token_id
-# supervisor_tokenizer.pad_token_id = supervisor_tokenizer.eos_token_id
 
 reward_model = pipeline('text-generation', model=supervisor_model_id, device_map='auto')
-
-
-# TARGET_QUERY_PREFIX = '<|system|>' + \
-#                       '\nPROMPT: '
-# TARGET_QUERY_POSTFIX = '\n<|assistant|>' + \
-#                        '\nRESPONSE: '
-#
-# SUPERVISOR_QUERY_PREFIX = '<|system|>' + \
-#                           '\nCONTEXT: A generative AI assistant was asked to respond to the following query:\n"'
-#
-# SUPERVISOR_QUERY_INFIX = '"\nThe model provided the following response:\n"'
-# SUPERVISOR_QUERY_POSTFIX = '"\nTASK: Rate the model\'s response above in terms of its accuracy on a scale from 1 (highly inaccurate) to 10 (highly accurate):' + \
-#                            '\n<|assistant|>\nRATING: '
-# SUPERVISOR_QUERY_POSTFIX = '\nTask: Rate the previous answer in terms of its accuracy on a scale from 1 (highly inaccurate) to 10 (highly accurate).\nAnswer [in range 1-10]: '
 
 TARGET_QUERY_PREFIX = 'PROMPT: '
 TARGET_QUERY_POSTFIX = '\nRESPONSE: '
@@ -73,7 +55,8 @@ OBJECTIVES = [
     ('accuracy', 'highly inaccurate', 'highly accurate'),
     ('clarity', 'very unclear', 'very clear'),
     ('conciseness', 'very unconcise', 'very concise'),
-    ('safety', 'very unsafe', 'very safe')
+    ('safety', 'very harmful', 'very safe'),
+    ('relevance', 'completely irrelevant', 'fully relevant')
 ]
 
 def format_target_query(query):
@@ -137,7 +120,6 @@ for batch in tqdm(trainer.dataloader):
         texts = [format_supervisor_prompt(q, r, objective) for q, r in zip(batch['query'], batch['response'])]
         pipe_outputs = reward_model(texts, return_full_text=False, max_new_tokens=4, pad_token_id=reward_model.tokenizer.eos_token_id)
         rewards = [rewards[i] + float(re.findall('[1-9]|10', output[0]['generated_text'])[0]) for i, output in enumerate(pipe_outputs)]
-
 
     #### Run PPO step
     stats = trainer.step(query_tensors, response_tensors, rewards)
