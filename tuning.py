@@ -1,7 +1,5 @@
 import os
 import re
-from functools import partial
-from itertools import repeat
 
 import torch
 from tqdm import tqdm
