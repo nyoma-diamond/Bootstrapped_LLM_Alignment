@@ -136,7 +136,7 @@ for batch in tqdm(trainer.dataloader):
     for objective in OBJECTIVES:
         texts = [format_supervisor_prompt(q, r, objective) for q, r in zip(batch['query'], batch['response'])]
         pipe_outputs = reward_model(texts, return_full_text=False, max_new_tokens=4, pad_token_id=reward_model.tokenizer.eos_token_id)
-        rewards = [rewards[i] + 11.-float(re.findall('[1-9]|10', output[0]['generated_text'])[0]) for i, output in enumerate(pipe_outputs)]
+        rewards = [rewards[i] + float(re.findall('[1-9]|10', output[0]['generated_text'])[0]) for i, output in enumerate(pipe_outputs)]
 
 
     #### Run PPO step
