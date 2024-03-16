@@ -63,7 +63,7 @@ def format_target_query(query):
     return TARGET_QUERY_PREFIX + query + TARGET_QUERY_POSTFIX
 
 def format_supervisor_prompt(query, response, objective_strs):
-     return SUPERVISOR_QUERY_PREFIX + '"' + query + '"' + SUPERVISOR_QUERY_INFIX + '"' + response + '"' + SUPERVISOR_QUERY_POSTFIX.format(*objective_strs)
+     return SUPERVISOR_QUERY_PREFIX + f'"{query}"' + SUPERVISOR_QUERY_INFIX + f'"{response}"' + SUPERVISOR_QUERY_POSTFIX.format(*objective_strs)
 
 def tokenize(sample):
     sample['input_ids'] = target_tokenizer.encode(format_target_query(sample['query']), max_length=256)#, truncation=True, padding='max_length')#, return_tensors='pt')
