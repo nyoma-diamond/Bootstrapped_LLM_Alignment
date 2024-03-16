@@ -72,6 +72,11 @@ def tokenize(sample):
 def collate(data):
     return {key: [d[key] for d in data] for key in data[0]}
 
+def get_reward(reward_text):
+    obj_reward = float(re.findall('[0-9]+', reward_text[0]['generated_text'])[0])
+    assert 1 <= obj_reward <= 10, 'Invalid objective reward provided.'
+    return obj_reward
+
 # Load TruthfulQA dataset. VALIDATION is the only available split
 dataset = load_dataset(path='truthful_qa', name='generation', split=Split.VALIDATION).train_test_split(train_size=0.66, shuffle=True, seed=42)
 dataset = dataset.rename_column('question', 'query')
@@ -119,7 +124,8 @@ for batch in tqdm(trainer.dataloader):
     for objective in OBJECTIVES:
         texts = [format_supervisor_prompt(q, r, objective) for q, r in zip(batch['query'], batch['response'])]
         pipe_outputs = reward_model(texts, return_full_text=False, max_new_tokens=4, pad_token_id=reward_model.tokenizer.eos_token_id)
-        rewards = [rewards[i] + float(re.findall('[1-9]|10', output[0]['generated_text'])[0]) for i, output in enumerate(pipe_outputs)]
+
+        rewards = [reward + get_reward(output) for reward, output in zip(rewards, pipe_outputs)]
 
     #### Run PPO step
     stats = trainer.step(query_tensors, response_tensors, rewards)
