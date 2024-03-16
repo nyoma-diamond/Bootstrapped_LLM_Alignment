@@ -10,13 +10,30 @@ os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = '1'
 # Force CPU-only training
 # os.environ["CUDA_VISIBLE_DEVICES"]=""
 
-
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoTokenizer
 from datasets import load_dataset, Split
 from trl import PPOConfig, PPOTrainer, AutoModelForCausalLMWithValueHead
 from transformers import pipeline
-
 from peft import LoraConfig
+
+
+TARGET_QUERY_PREFIX = 'PROMPT: '
+TARGET_QUERY_POSTFIX = '\nRESPONSE: '
+
+SUPERVISOR_QUERY_PREFIX = 'CONTEXT: A generative AI assistant was asked to respond to the following query: '
+SUPERVISOR_QUERY_INFIX = ' The model provided the following response: '
+SUPERVISOR_QUERY_POSTFIX = '\nTASK: Rate the model\'s response above in terms of its {} on a scale from 1 ({}) to 10 ({})' + \
+                           '\nRATING: '
+
+OBJECTIVES = [
+    ('accuracy', 'highly inaccurate', 'highly accurate'),
+    ('clarity', 'very unclear', 'very clear'),
+    ('conciseness', 'very unconcise', 'very concise'),
+    ('safety', 'very harmful', 'very safe'),
+    ('relevance', 'completely irrelevant', 'fully relevant')
+]
+
+STEP_EACH_OBJECTIVE = True
 
 # target_model_id = 'NousResearch/Llama-2-7b-hf'
 # supervisor_model_id = 'NousResearch/Llama-2-7b-hf'
@@ -41,22 +58,6 @@ target_tokenizer.pad_token_id = target_tokenizer.eos_token_id
 
 reward_model = pipeline('text-generation', model=supervisor_model_id, device_map='auto')
 
-TARGET_QUERY_PREFIX = 'PROMPT: '
-TARGET_QUERY_POSTFIX = '\nRESPONSE: '
-
-SUPERVISOR_QUERY_PREFIX = 'CONTEXT: A generative AI assistant was asked to respond to the following query: '
-SUPERVISOR_QUERY_INFIX = ' The model provided the following response: '
-SUPERVISOR_QUERY_POSTFIX = '\nTASK: Rate the model\'s response above in terms of its {} on a scale from 1 ({}) to 10 ({})' + \
-                           '\nRATING: '
-
-OBJECTIVES = [
-    ('accuracy', 'highly inaccurate', 'highly accurate'),
-    ('clarity', 'very unclear', 'very clear'),
-    ('conciseness', 'very unconcise', 'very concise'),
-    ('safety', 'very harmful', 'very safe'),
-    ('relevance', 'completely irrelevant', 'fully relevant')
-]
-
 def format_target_query(query):
     return TARGET_QUERY_PREFIX + query + TARGET_QUERY_POSTFIX
 
@@ -73,59 +74,65 @@ def collate(data):
 def get_reward(reward_text):
     obj_reward = float(re.findall('[0-9]+', reward_text[0]['generated_text'])[0])
     assert 1 <= obj_reward <= 10, 'Invalid objective reward provided.'
-    return obj_reward
-
-# Load TruthfulQA dataset. VALIDATION is the only available split
-dataset = load_dataset(path='truthful_qa', name='generation', split=Split.VALIDATION).train_test_split(train_size=0.66, shuffle=True, seed=42)
-dataset = dataset.rename_column('question', 'query')
-dataset = dataset.map(tokenize, batched=False)
-dataset.set_format(type='torch')
+    return torch.tensor(obj_reward)
 
 
+# Modified from https://huggingface.co/docs/trl/main/en/ppo_trainer
+if __name__ == '__main__':
+    # Load TruthfulQA dataset. VALIDATION is the only available split
+    dataset = load_dataset(path='truthful_qa', name='generation', split=Split.VALIDATION).train_test_split(train_size=0.66, shuffle=True, seed=42)
+    dataset = dataset.rename_column('question', 'query')
+    dataset = dataset.map(tokenize, batched=False)
+    dataset.set_format(type='torch')
 
-config = PPOConfig(
-    model_name=target_model_id,
-    # accelerator_kwargs=dict(mixed_precision='fp16'),
-    batch_size=32,
-    mini_batch_size=8,
-    gradient_accumulation_steps=1
-)
+    config = PPOConfig(
+        model_name=target_model_id,
+        # accelerator_kwargs=dict(mixed_precision='fp16'),
+        batch_size=32,
+        mini_batch_size=8,
+        gradient_accumulation_steps=1
+    )
 
-trainer = PPOTrainer(
-    config=config,
-    model=target_model,
-    # ref_model=supervisor_model,
-    tokenizer=target_tokenizer,
-    dataset=dataset[Split.TRAIN],
-    data_collator=collate
-)
+    trainer = PPOTrainer(
+        config=config,
+        model=target_model,
+        # ref_model=supervisor_model,
+        tokenizer=target_tokenizer,
+        dataset=dataset[Split.TRAIN],
+        data_collator=collate
+    )
 
-generation_kwargs = dict(
-    min_length=-1,
-    top_k=0,
-    top_p=1.0,
-    do_sample=True,
-    pad_token_id=target_tokenizer.eos_token_id,
-    max_new_tokens=32
-)
+    generation_kwargs = dict(
+        min_length=-1,
+        top_k=0,
+        top_p=1.0,
+        do_sample=True,
+        pad_token_id=target_tokenizer.eos_token_id,
+        max_new_tokens=32
+    )
 
-for batch in tqdm(trainer.dataloader):
-    query_tensors = batch['input_ids']
+    for batch in tqdm(trainer.dataloader):
+        query_tensors = batch['input_ids']
 
-    #### Get response from SFTModel
-    response_tensors = trainer.generate(query_tensors, return_prompt=False, **generation_kwargs)
-    batch['response'] = target_tokenizer.batch_decode(response_tensors)
+        #### Get response from SFTModel
+        response_tensors = trainer.generate(query_tensors, return_prompt=False, **generation_kwargs)
+        batch['response'] = target_tokenizer.batch_decode(response_tensors)
 
-    rewards = [torch.tensor(0) for _ in range(len(query_tensors))]
+        rewards = [torch.tensor(0) for _ in range(len(query_tensors))]  # This does nothing if STEP_EACH_OBJECTIVE is true
 
-    #### Compute reward score
-    for objective in OBJECTIVES:
-        texts = [format_supervisor_prompt(q, r, objective) for q, r in zip(batch['query'], batch['response'])]
-        pipe_outputs = reward_model(texts, return_full_text=False, max_new_tokens=4, pad_token_id=reward_model.tokenizer.eos_token_id)
+        for i, objective in enumerate(OBJECTIVES):
+            reward_prompts = [format_supervisor_prompt(q, r, objective) for q, r in zip(batch['query'], batch['response'])]
 
-        rewards = [reward + get_reward(output) for reward, output in zip(rewards, pipe_outputs)]
+            #### Compute reward score
+            pipe_outputs = reward_model(reward_prompts, return_full_text=False, max_new_tokens=4, pad_token_id=reward_model.tokenizer.eos_token_id)
 
-    #### Run PPO step
-    stats = trainer.step(query_tensors, response_tensors, rewards)
-    trainer.log_stats(stats, batch, rewards)
+            if STEP_EACH_OBJECTIVE:
+                rewards = [get_reward(output) for output in pipe_outputs]
+            else:
+                rewards = [reward + get_reward(output) for reward, output in zip(rewards, pipe_outputs)]
+
+            #### Run PPO step (run for each objective if desired, otherwise only on sum following last objective
+            if STEP_EACH_OBJECTIVE or i+1 == len(OBJECTIVES):
+                stats = trainer.step(query_tensors, response_tensors, rewards)
+                trainer.log_stats(stats, batch, rewards)
 
