@@ -33,7 +33,8 @@ OBJECTIVES = [
     ('relevance', 'completely irrelevant', 'fully relevant')
 ]
 
-STEP_EACH_OBJECTIVE = True
+STEP_EACH_OBJECTIVE = False
+EPOCHS = 25
 
 # target_model_id = 'NousResearch/Llama-2-7b-hf'
 # supervisor_model_id = 'NousResearch/Llama-2-7b-hf'
@@ -111,28 +112,29 @@ if __name__ == '__main__':
         max_new_tokens=32
     )
 
-    for batch in tqdm(trainer.dataloader):
-        query_tensors = batch['input_ids']
+    for epoch in range(EPOCHS):
+        for batch in tqdm(trainer.dataloader, desc=f'Epoch {epoch+1}/{EPOCHS}'):
+            query_tensors = batch['input_ids']
 
-        #### Get response from SFTModel
-        response_tensors = trainer.generate(query_tensors, return_prompt=False, **generation_kwargs)
-        batch['response'] = target_tokenizer.batch_decode(response_tensors)
+            #### Get response from SFTModel
+            response_tensors = trainer.generate(query_tensors, return_prompt=False, **generation_kwargs)
+            batch['response'] = target_tokenizer.batch_decode(response_tensors)
 
-        rewards = [torch.tensor(0) for _ in range(len(query_tensors))]  # This does nothing if STEP_EACH_OBJECTIVE is true
+            rewards = [torch.tensor(0) for _ in range(len(query_tensors))]  # This does nothing if STEP_EACH_OBJECTIVE is true
 
-        for i, objective in enumerate(OBJECTIVES):
-            reward_prompts = [format_supervisor_prompt(q, r, objective) for q, r in zip(batch['query'], batch['response'])]
+            for i, objective in enumerate(OBJECTIVES):
+                reward_prompts = [format_supervisor_prompt(q, r, objective) for q, r in zip(batch['query'], batch['response'])]
 
-            #### Compute reward score
-            pipe_outputs = reward_model(reward_prompts, return_full_text=False, max_new_tokens=4, pad_token_id=reward_model.tokenizer.eos_token_id)
+                #### Compute reward score
+                pipe_outputs = reward_model(reward_prompts, return_full_text=False, max_new_tokens=4, pad_token_id=reward_model.tokenizer.eos_token_id)
 
-            if STEP_EACH_OBJECTIVE:
-                rewards = [get_reward(output) for output in pipe_outputs]
-            else:
-                rewards = [reward + get_reward(output) for reward, output in zip(rewards, pipe_outputs)]
+                if STEP_EACH_OBJECTIVE:
+                    rewards = [get_reward(output) for output in pipe_outputs]
+                else:
+                    rewards = [reward + get_reward(output) for reward, output in zip(rewards, pipe_outputs)]
 
-            #### Run PPO step (run for each objective if desired, otherwise only on sum following last objective
-            if STEP_EACH_OBJECTIVE or i+1 == len(OBJECTIVES):
-                stats = trainer.step(query_tensors, response_tensors, rewards)
-                trainer.log_stats(stats, batch, rewards)
+                #### Run PPO step (run for each objective if desired, otherwise only on sum following last objective
+                if STEP_EACH_OBJECTIVE or i+1 == len(OBJECTIVES):
+                    stats = trainer.step(query_tensors, response_tensors, rewards)
+                    trainer.log_stats(stats, batch, rewards)
 
