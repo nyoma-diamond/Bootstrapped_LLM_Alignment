@@ -86,11 +86,11 @@ if __name__ == '__main__':
         cache_dir=args.cache_dir
     )
 
-    target_model = args.target_model if args.model_name is None else args.model_name
+    target_model_name = args.target_model if args.model_name is None else args.model_name
     eval_model_id = args.eval_model
 
     model_out = f'{trainer_args.out_dir}/models'
-    target_model_path = target_model if args.model_name is None else f'{model_out}/{target_model}'
+    target_model_path = target_model_name if args.model_name is None else f'{model_out}/{target_model_name}'
 
     # Download and load models
     target_model = AutoModelForCausalLMWithValueHead.from_pretrained(
@@ -165,6 +165,6 @@ if __name__ == '__main__':
 
             rewards[objective[0]].extend([get_reward(output, as_tensor=False) for output in pipe_outputs])
 
-    os.makedirs(f'{model_out}/{target_model}', exist_ok=True)
-    with open(f'{model_out}/{target_model}/test_results.pkl', 'wb') as out_file:
+    os.makedirs(f'{model_out}/{target_model_name}', exist_ok=True)
+    with open(f'{model_out}/{target_model_name}/test_results.pkl', 'wb') as out_file:
         pickle.dump(rewards, out_file)
