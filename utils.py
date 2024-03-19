@@ -5,7 +5,7 @@ import torch
 
 @dataclass
 class TrainerArgs:
-    epochs: int = 10
+    epochs: int = 5
     batch_size: int = 32
     mini_batch_size: int = 8
     step_each_objective: bool = False
