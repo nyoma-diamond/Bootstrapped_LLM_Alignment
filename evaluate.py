@@ -165,5 +165,6 @@ if __name__ == '__main__':
 
             rewards[objective[0]].extend([get_reward(output, as_tensor=False) for output in pipe_outputs])
 
-    with open(f'{model_out}/test_results.pkl', 'wb') as out_file:
+    os.makedirs(f'{model_out}/{target_model}', exist_ok=True)
+    with open(f'{model_out}/{target_model}/test_results.pkl', 'wb') as out_file:
         pickle.dump(rewards, out_file)
