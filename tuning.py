@@ -95,6 +95,13 @@ def initialize_option_parser():
                         default='ericzzz/falcon-rw-1b-instruct-openorca',  # 'NousResearch/Llama-2-7b-hf'
                         dest='bootstrap_model',
                         help='Model to bootstrap fine-tune with.')
+    parser.add_argument('-c', '--cache-dir',
+                        action='store',
+                        type=str,
+                        default=None,
+                        dest='cache_dir',
+                        help='Path the directory to cache pretrained models.'
+                             'Used by transformers library when downloading and retrieving models.')
 
     return parser
 
@@ -110,7 +117,8 @@ if __name__ == '__main__':
         batch_size=args.batch_size,
         mini_batch_size=args.mini_batch_size,
         step_each_objective=args.step_each_objective,
-        out_dir=args.out_dir
+        out_dir=args.out_dir,
+        cache_dir=args.cache_dir
     )
 
     target_model_id = args.target_model
@@ -126,12 +134,26 @@ if __name__ == '__main__':
     )
 
     # Download and load models
-    target_model = AutoModelForCausalLMWithValueHead.from_pretrained(target_model_id, peft_config=lora_config)
-    target_tokenizer = AutoTokenizer.from_pretrained(target_model_id)
+    target_model = AutoModelForCausalLMWithValueHead.from_pretrained(
+        target_model_id,
+        peft_config=lora_config,
+        device_map='auto',
+        cache_dir=trainer_args.cache_dir
+    )
+    target_tokenizer = AutoTokenizer.from_pretrained(
+        target_model_id,
+        device_map='auto',
+        cache_dir=trainer_args.cache_dir
+    )
 
     target_tokenizer.pad_token_id = target_tokenizer.eos_token_id
 
-    reward_model = pipeline('text-generation', model=bootstrap_model_id, device_map='auto')
+    reward_model = pipeline(
+        task='text-generation',
+        model=bootstrap_model_id,
+        device_map='auto',
+        cache_dir=trainer_args.cache_dir
+    )
 
     # Load TruthfulQA dataset. VALIDATION is the only available split
     dataset = load_dataset(path='truthful_qa', name='generation', split=Split.VALIDATION).train_test_split(train_size=0.66, shuffle=True, seed=42)

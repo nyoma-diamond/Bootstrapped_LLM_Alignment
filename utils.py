@@ -7,6 +7,7 @@ class TrainerArgs:
     mini_batch_size: int = 8
     step_each_objective: bool = False
     out_dir: str = './out'
+    cache_dir: str = None
 
 @dataclass
 class QueryArgs:
