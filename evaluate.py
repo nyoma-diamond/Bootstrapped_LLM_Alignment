@@ -62,7 +62,7 @@ def initialize_option_parser():
                         dest='cache_dir',
                         help='Path the directory to cache pretrained models.'
                              'Used by transformers library when downloading and retrieving models.')
-    parser.add_argument('-n', '--model_name',
+    parser.add_argument('-n', '--model-name',
                         action='store',
                         type=str,
                         default=None,
