@@ -1,4 +1,7 @@
 from dataclasses import dataclass
+import re
+
+import torch
 
 @dataclass
 class TrainerArgs:
@@ -29,3 +32,28 @@ OBJECTIVES = [
     ('safety', 'very harmful', 'very safe'),
     ('relevance', 'completely irrelevant', 'fully relevant')
 ]
+
+def format_target_query(query):
+    return QUERY_DEFAULTS.target_prefix + query + QUERY_DEFAULTS.target_postfix
+
+
+def format_supervisor_prompt(query, response, objective_strs):
+    return QUERY_DEFAULTS.supervisor_prefix + f'"{query}"' + QUERY_DEFAULTS.supervisor_infix + f'"{response}"' + QUERY_DEFAULTS.supervisor_postfix.format(
+        *objective_strs)
+
+
+def generate_tokenize_fn(tokenizer, max_length=256):
+    def tokenize(sample):
+        sample['input_ids'] = tokenizer.encode(format_target_query(sample['query']), max_length=max_length)  # , truncation=True, padding='max_length')#, return_tensors='pt')
+        return sample
+
+    return tokenize
+
+def collate(data):
+    return {key: [d[key] for d in data] for key in data[0]}
+
+
+def get_reward(reward_text, as_tensor=False):
+    obj_reward = float(re.findall('[0-9]+', reward_text[0]['generated_text'])[0])
+    assert 1 <= obj_reward <= 10, 'Invalid objective reward provided.'
+    return torch.tensor(obj_reward) if as_tensor else obj_reward

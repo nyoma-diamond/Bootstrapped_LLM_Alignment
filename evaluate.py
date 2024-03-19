@@ -1,7 +1,7 @@
 import os
+import pickle
 from argparse import ArgumentParser
 
-import torch
 from tqdm import tqdm
 
 # High bandwidth model downloading
@@ -14,7 +14,6 @@ from transformers import AutoTokenizer
 from datasets import load_dataset, Split
 from trl import PPOConfig, PPOTrainer, AutoModelForCausalLMWithValueHead
 from transformers import pipeline
-from peft import LoraConfig
 
 from utils import TrainerArgs, generate_tokenize_fn, collate, format_supervisor_prompt, get_reward
 from utils import TRAINER_DEFAULTS, OBJECTIVES
@@ -26,12 +25,6 @@ def initialize_option_parser():
     :return: the option parser
     """
     parser = ArgumentParser()
-    parser.add_argument('-e', '--epochs',
-                        action='store',
-                        type=int,
-                        default=TRAINER_DEFAULTS.epochs,
-                        dest='epochs',
-                        help='Number of epochs to tune for.')
     parser.add_argument('-b', '--batch-size',
                         action='store',
                         type=int,
@@ -44,13 +37,6 @@ def initialize_option_parser():
                         default=TRAINER_DEFAULTS.mini_batch_size,
                         dest='mini_batch_size',
                         help='The number of samples per mini-batch of each tuning batch (used by PPO trainer).')
-    parser.add_argument('-o', '--step-each-objective',
-                        action='store_true',
-                        default=False,
-                        dest='step_each_objective',
-                        help='Indicate whether the bootstrap-tuner should step for each objective.'
-                             'False: Sum all objectives and step once.'
-                             'True: Step for each objective.')
     parser.add_argument('-d', '--out-dir',
                         action='store',
                         type=str,
@@ -93,10 +79,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     trainer_args = TrainerArgs(
-        epochs=args.epochs,
         batch_size=args.batch_size,
         mini_batch_size=args.mini_batch_size,
-        step_each_objective=args.step_each_objective,
         out_dir=args.out_dir,
         cache_dir=args.cache_dir
     )
@@ -105,28 +89,18 @@ if __name__ == '__main__':
     bootstrap_model_id = args.bootstrap_model
 
     model_out = f'{trainer_args.out_dir}/models'
-    model_name = f'{target_model_id.split("/")[-1]}_{bootstrap_model_id.split("/")[-1]}_bootstrap-trained' if args.model_name is None else args.model_name
-
-    lora_config = LoraConfig(
-        r=16,
-        lora_alpha=16,
-        # target_modules=['q_proj', 'k_proj', 'v_proj'],
-        lora_dropout=0.05,
-        bias="none",
-        task_type='CAUSAL_LM'
-    )
+    # model_name = f'{target_model_id.split("/")[-1]}_{bootstrap_model_id.split("/")[-1]}_bootstrap-trained' if args.model_name is None else args.model_name
+    model_name = f'{target_model_id.split("/")[-1]}_bootstrap-trained' if args.model_name is None else args.model_name
+    target_model_path = f'{model_out}/{model_name}'
 
     # Download and load models
     target_model = AutoModelForCausalLMWithValueHead.from_pretrained(
-        target_model_id,
-        peft_config=lora_config,
-        device_map='auto',
-        cache_dir=trainer_args.cache_dir
+        target_model_path,
+        device_map='auto'
     )
     target_tokenizer = AutoTokenizer.from_pretrained(
-        target_model_id,
-        device_map='auto',
-        cache_dir=trainer_args.cache_dir
+        target_model_path,
+        device_map='auto'
     )
 
     target_tokenizer.pad_token_id = target_tokenizer.eos_token_id
@@ -157,7 +131,7 @@ if __name__ == '__main__':
         model=target_model,
         # ref_model=supervisor_model,
         tokenizer=target_tokenizer,
-        dataset=dataset[Split.TRAIN],
+        dataset=dataset[Split.TEST],
         data_collator=collate
     )
 
@@ -170,37 +144,27 @@ if __name__ == '__main__':
         max_new_tokens=32
     )
 
-    for epoch in range(trainer_args.epochs):
-        for batch in tqdm(trainer.dataloader, desc=f'Epoch {epoch + 1}/{trainer_args.epochs}'):
-            query_tensors = batch['input_ids']
+    rewards = {objective: [] for objective, *_ in OBJECTIVES}
 
-            #### Get response from SFTModel
-            response_tensors = trainer.generate(query_tensors, return_prompt=False, **generation_kwargs)
-            batch['response'] = target_tokenizer.batch_decode(response_tensors)
+    for batch in tqdm(trainer.dataloader):
+        query_tensors = batch['input_ids']
 
-            rewards = [torch.tensor(0) for _ in range(len(query_tensors))]  # This does nothing if STEP_EACH_OBJECTIVE is true
+        #### Get response from SFTModel
+        response_tensors = trainer.generate(query_tensors, return_prompt=False, **generation_kwargs)
+        batch['response'] = target_tokenizer.batch_decode(response_tensors)
 
-            for i, objective in enumerate(OBJECTIVES):
-                reward_prompts = [format_supervisor_prompt(q, r, objective) for q, r in zip(batch['query'], batch['response'])]
+        for i, objective in enumerate(OBJECTIVES):
+            reward_prompts = [format_supervisor_prompt(q, r, objective) for q, r in zip(batch['query'], batch['response'])]
 
-                #### Compute reward score
-                pipe_outputs = reward_model(
-                    reward_prompts,
-                    return_full_text=False,
-                    max_new_tokens=4,
-                    pad_token_id=reward_model.tokenizer.eos_token_id
-                )
+            #### Compute reward score
+            pipe_outputs = reward_model(
+                reward_prompts,
+                return_full_text=False,
+                max_new_tokens=4,
+                pad_token_id=reward_model.tokenizer.eos_token_id
+            )
 
-                if trainer_args.step_each_objective:
-                    rewards = [get_reward(output, as_tensor=True) for output in pipe_outputs]
-                else:
-                    rewards = [reward + get_reward(output, as_tensor=True) for reward, output in zip(rewards, pipe_outputs)]
+            rewards[objective[0]].extend([get_reward(output, as_tensor=False) for output in pipe_outputs])
 
-                #### Run PPO step (run for each objective if desired, otherwise only on sum following last objective
-                if trainer_args.step_each_objective or i + 1 == len(OBJECTIVES):
-                    stats = trainer.step(query_tensors, response_tensors, rewards)
-                    trainer.log_stats(stats, batch, rewards)
-
-
-    os.makedirs(model_out, exist_ok=True)
-    trainer.save_pretrained(f'{model_out}/{model_name}')
+    with open(f'{model_out}/test_results.pkl', 'wb') as out_file:
+        pickle.dump(rewards, out_file)
