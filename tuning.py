@@ -1,5 +1,5 @@
 import os
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawTextHelpFormatter
 
 import torch
 from tqdm import tqdm
@@ -25,7 +25,7 @@ def initialize_option_parser():
     Initializes the option parser
     :return: the option parser
     """
-    parser = ArgumentParser()
+    parser = ArgumentParser(formatter_class=RawTextHelpFormatter)
     parser.add_argument('-e', '--epochs',
                         action='store',
                         type=int,
@@ -49,8 +49,8 @@ def initialize_option_parser():
                         default=False,
                         dest='step_each_objective',
                         help='Indicate whether the bootstrap-tuner should step for each objective.'
-                             'False: Sum all objectives and step once.'
-                             'True: Step for each objective.')
+                             '\nFalse: Sum all objectives and step once.'
+                             '\nTrue: Step for each objective.')
     parser.add_argument('-d', '--out-dir',
                         action='store',
                         type=str,
@@ -75,7 +75,7 @@ def initialize_option_parser():
                         default=None,
                         dest='cache_dir',
                         help='Path the directory to cache pretrained models.'
-                             'Used by transformers library when downloading and retrieving models.')
+                             '\nUsed by transformers library when downloading and retrieving models.')
     parser.add_argument('-n', '--model-name',
                         action='store',
                         type=str,
