@@ -118,7 +118,7 @@ if __name__ == '__main__':
     dataset.set_format(type='torch')
 
     config = PPOConfig(
-        model_name=target_model_id,
+        model_name=target_model,
         # accelerator_kwargs=dict(mixed_precision='fp16'),
         batch_size=trainer_args.batch_size,
         mini_batch_size=trainer_args.mini_batch_size,
