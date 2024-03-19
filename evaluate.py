@@ -48,7 +48,8 @@ def initialize_option_parser():
                         type=str,
                         default='ericzzz/falcon-rw-1b-instruct-openorca',  # 'NousResearch/Llama-2-7b-hf'
                         dest='target_model',
-                        help='Model to fine tune.')
+                        help='Model to evaluate.'
+                             '\nThis is ignored if the -n/--model-name argument is provided')
     parser.add_argument('-s', '--bootstrap-model',
                         action='store',
                         type=str,
@@ -85,12 +86,11 @@ if __name__ == '__main__':
         cache_dir=args.cache_dir
     )
 
-    target_model_id = args.target_model
+    target_model = args.target_model if args.model_name is None else args.model_name
     bootstrap_model_id = args.bootstrap_model
 
     model_out = f'{trainer_args.out_dir}/models'
-    model_name = f'{target_model_id.split("/")[-1]}_{bootstrap_model_id.split("/")[-1]}_bootstrap-trained' if args.model_name is None else args.model_name
-    target_model_path = f'{model_out}/{model_name}'
+    target_model_path = target_model if args.model_name is None else f'{model_out}/{target_model}'
 
     # Download and load models
     target_model = AutoModelForCausalLMWithValueHead.from_pretrained(
