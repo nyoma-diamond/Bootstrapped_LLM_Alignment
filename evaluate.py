@@ -50,12 +50,12 @@ def initialize_option_parser():
                         dest='target_model',
                         help='Model to evaluate.'
                              '\nThis is ignored if the -n/--model-name argument is provided')
-    parser.add_argument('-s', '--bootstrap-model',
+    parser.add_argument('-e', '--eval-model',
                         action='store',
                         type=str,
                         default='ericzzz/falcon-rw-1b-instruct-openorca',  # 'NousResearch/Llama-2-7b-hf'
-                        dest='bootstrap_model',
-                        help='Model to bootstrap fine-tune with.')
+                        dest='eval_model',
+                        help='Model to evaluate using (likely the same as the bootstrap model).')
     parser.add_argument('-c', '--cache-dir',
                         action='store',
                         type=str,
@@ -87,7 +87,7 @@ if __name__ == '__main__':
     )
 
     target_model = args.target_model if args.model_name is None else args.model_name
-    bootstrap_model_id = args.bootstrap_model
+    eval_model_id = args.eval_model
 
     model_out = f'{trainer_args.out_dir}/models'
     target_model_path = target_model if args.model_name is None else f'{model_out}/{target_model}'
@@ -106,7 +106,7 @@ if __name__ == '__main__':
 
     reward_model = pipeline(
         task='text-generation',
-        model=bootstrap_model_id,
+        model=eval_model_id,
         device_map='auto',
         model_kwargs=dict(cache_dir=trainer_args.cache_dir)
     )
