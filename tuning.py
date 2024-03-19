@@ -152,7 +152,7 @@ if __name__ == '__main__':
         task='text-generation',
         model=bootstrap_model_id,
         device_map='auto',
-        cache_dir=trainer_args.cache_dir
+        model_kwargs=dict(cache_dir=trainer_args.cache_dir)
     )
 
     # Load TruthfulQA dataset. VALIDATION is the only available split
