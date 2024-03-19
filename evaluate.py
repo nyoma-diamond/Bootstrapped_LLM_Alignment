@@ -89,8 +89,7 @@ if __name__ == '__main__':
     bootstrap_model_id = args.bootstrap_model
 
     model_out = f'{trainer_args.out_dir}/models'
-    # model_name = f'{target_model_id.split("/")[-1]}_{bootstrap_model_id.split("/")[-1]}_bootstrap-trained' if args.model_name is None else args.model_name
-    model_name = f'{target_model_id.split("/")[-1]}_bootstrap-trained' if args.model_name is None else args.model_name
+    model_name = f'{target_model_id.split("/")[-1]}_{bootstrap_model_id.split("/")[-1]}_bootstrap-trained' if args.model_name is None else args.model_name
     target_model_path = f'{model_out}/{model_name}'
 
     # Download and load models
