@@ -33,6 +33,7 @@ OBJECTIVES = [
     ('relevance', 'completely irrelevant', 'fully relevant')
 ]
 
+
 def format_target_query(query):
     return QUERY_DEFAULTS.target_prefix + query + QUERY_DEFAULTS.target_postfix
 
@@ -48,6 +49,7 @@ def generate_tokenize_fn(tokenizer, max_length=256):
         return sample
 
     return tokenize
+
 
 def collate(data):
     return {key: [d[key] for d in data] for key in data[0]}
