@@ -55,5 +55,5 @@ def collate(data):
 
 def get_reward(reward_text, as_tensor=False):
     obj_reward = float(re.findall('[0-9]+', reward_text[0]['generated_text'])[0])
-    assert 1 <= obj_reward <= 10, 'Invalid objective reward provided.'
+    assert 1 <= obj_reward <= 10, f'Invalid objective reward provided: {obj_reward}'
     return torch.tensor(obj_reward) if as_tensor else obj_reward
