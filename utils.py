@@ -18,9 +18,9 @@ class QueryArgs:
     target_postfix: str = '\nRESPONSE: '
 
     supervisor_prefix: str = 'CONTEXT: A generative AI assistant was asked to respond to the following query: '
-    supervisor_infix: str = ' The model provided the following response: '
-    supervisor_postfix: str = '\nTASK: Rate the model\'s response above in terms of its {} on a scale from 1 ({}) to 10 ({})' + \
-                              '\nRATING: '
+    supervisor_infix: str = ' The AI assistant provided the following response: '
+    supervisor_postfix: str = '\nTASK: Rate the AI assistant\'s response above in terms of its {} on a scale from 1 ({}) to 10 ({})' + \
+                              '\nRATING [1-10]: '
 
 TRAINER_DEFAULTS = TrainerArgs()
 QUERY_DEFAULTS = QueryArgs()
