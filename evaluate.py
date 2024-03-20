@@ -46,14 +46,14 @@ def initialize_option_parser():
     parser.add_argument('-t', '--target-model',
                         action='store',
                         type=str,
-                        default='ericzzz/falcon-rw-1b-instruct-openorca',  # 'NousResearch/Llama-2-7b-hf'
+                        default='microsoft/phi-1_5',
                         dest='target_model',
                         help='Model to evaluate.'
                              '\nThis is ignored if the -n/--model-name argument is provided')
     parser.add_argument('-e', '--eval-model',
                         action='store',
                         type=str,
-                        default='ericzzz/falcon-rw-1b-instruct-openorca',  # 'NousResearch/Llama-2-7b-hf'
+                        default='mistralai/Mistral-7B-Instruct-v0.2',
                         dest='eval_model',
                         help='Model to evaluate using (likely the same as the bootstrap model).')
     parser.add_argument('-c', '--cache-dir',

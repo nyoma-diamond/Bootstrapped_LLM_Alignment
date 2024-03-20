@@ -60,13 +60,13 @@ def initialize_option_parser():
     parser.add_argument('-t', '--target-model',
                         action='store',
                         type=str,
-                        default='ericzzz/falcon-rw-1b-instruct-openorca',  # 'NousResearch/Llama-2-7b-hf'
+                        default='microsoft/phi-1_5',
                         dest='target_model',
                         help='Model to fine tune.')
     parser.add_argument('-s', '--bootstrap-model',
                         action='store',
                         type=str,
-                        default='ericzzz/falcon-rw-1b-instruct-openorca',  # 'NousResearch/Llama-2-7b-hf'
+                        default='mistralai/Mistral-7B-Instruct-v0.2',
                         dest='bootstrap_model',
                         help='Model to bootstrap fine-tune with.')
     parser.add_argument('-c', '--cache-dir',
