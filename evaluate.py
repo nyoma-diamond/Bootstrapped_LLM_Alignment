@@ -128,7 +128,6 @@ if __name__ == '__main__':
     trainer = PPOTrainer(
         config=config,
         model=target_model,
-        # ref_model=reward_model.model,  # TODO: unclear whether this should be used or not
         tokenizer=target_tokenizer,
         dataset=dataset[Split.TEST],
         data_collator=collate

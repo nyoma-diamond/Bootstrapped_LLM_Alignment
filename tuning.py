@@ -82,6 +82,11 @@ def initialize_option_parser():
                         default=None,
                         dest='model_name',
                         help='Name for the newly tuned model.')
+    parser.add_argument('-r', '--bootstrap_ref_model',
+                        action='store_true',
+                        default=False,
+                        dest='bootstrap_ref_model',
+                        help='Whether to use the bootstrap model as the PPO trainer\'s reference model.')
 
     return parser
 
@@ -155,7 +160,7 @@ if __name__ == '__main__':
     trainer = PPOTrainer(
         config=config,
         model=target_model,
-        ref_model=reward_model.model,  # TODO: unclear whether this should be used or not
+        ref_model=reward_model.model if args.bootstrap_ref_model else None,
         tokenizer=target_tokenizer,
         dataset=dataset[Split.TRAIN],
         data_collator=collate
